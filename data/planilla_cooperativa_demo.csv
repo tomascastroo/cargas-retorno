@@ -1,0 +1,5 @@
+external_id,origin,destination,pickup_in_days,pickup_window_days,cargo_type,description,pallets,weight_kg,vehicle_types,body_types,price_ars,price_negotiable,shipper_name,shipper_contact,valid_hours,seen_hours_ago
+COOP-118,CORDOBA,Bs As,1,1,general,HARINA BOLSAS PALETIZADA,24,22000,semi,sider|caja seca,1.900.000,true,MOLINOS DEL CENTRO SA (DEMO),,72,1
+COOP-119,Villa Carlos Paz,Luján,1,1,general,Bebidas sin alcohol,16,15000,semi,,1.400.000,true,Embotelladora Sierras (demo),,48,4
+COOP-120,Pueblo Inventado,Buenos Aires,1,0,general,Registro con localidad inexistente,10,5000,,,500.000,true,Desconocido (demo),,48,2
+COOP-121,Rosario,Buenos Aires,1,1,general,Aceite envasado,22,20000,semi,,980.000,true,Aceitera del Paraná (demo),,48,2

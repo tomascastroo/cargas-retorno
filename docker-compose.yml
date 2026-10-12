@@ -1,0 +1,65 @@
+# Cargas de retorno — entorno local completo, sin servicios pagos.
+#
+#   docker compose up -d --build        # base de datos + aplicación (http://localhost:8000)
+#   docker compose --profile llm up -d  # además, Ollama (LLM local opcional)
+#
+# Los valores por defecto (${VAR:-valor}) son sólo para desarrollo local.
+
+name: cargas-retorno
+
+x-db: &db-env
+  CARGAS_DB_USER: ${CARGAS_DB_USER:-cargas}
+  CARGAS_DB_PASSWORD: ${CARGAS_DB_PASSWORD:-cargas_dev_password}
+  CARGAS_DB_NAME: ${CARGAS_DB_NAME:-cargas}
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      <<: *db-env
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres_dev_password}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/10-init.sh:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${CARGAS_DB_NAME:-cargas}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    # Migraciones + datos demo (idempotente) y luego la API con la interfaz web.
+    command: ["sh", "-c", "python -m cargas.cli migrate && python -m cargas.cli seed && exec uvicorn cargas.main:app --host 0.0.0.0 --port 8000"]
+    environment:
+      CARGAS_ENVIRONMENT: ${CARGAS_ENVIRONMENT:-development}
+      CARGAS_DATABASE_URL: postgresql+psycopg://${CARGAS_DB_USER:-cargas}:${CARGAS_DB_PASSWORD:-cargas_dev_password}@db:5432/${CARGAS_DB_NAME:-cargas}
+      CARGAS_SECRET_KEY: ${CARGAS_SECRET_KEY:-dev-only-insecure-secret-change-me-0001}
+      CARGAS_DEMO_PASSWORD: ${CARGAS_DEMO_PASSWORD:-demo1234}
+      # none = sólo reglas · ollama = LLM local (levantar con --profile llm)
+      CARGAS_LLM_PROVIDER: ${CARGAS_LLM_PROVIDER:-none}
+      CARGAS_OLLAMA_URL: ${CARGAS_OLLAMA_URL:-http://ollama:11434}
+      CARGAS_OLLAMA_MODEL: ${CARGAS_OLLAMA_MODEL:-qwen2.5:1.5b}
+      # haversine (sin red) · osrm (servidor OSRM propio, ver docs/arquitectura.md)
+      CARGAS_ROUTING_PROVIDER: ${CARGAS_ROUTING_PROVIDER:-haversine}
+      CARGAS_OSRM_URL: ${CARGAS_OSRM_URL:-http://osrm:5000}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ollama:
+    profiles: ["llm"]
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+
+volumes:
+  db-data:
+  ollama-data:

@@ -1,0 +1,44 @@
+[project]
+name = "cargas-retorno"
+version = "0.1.0"
+description = "Agente de cargas de retorno para camiones (MVP local, sin servicios pagos)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.143.0,<0.144",
+  "uvicorn>=0.54.0,<0.55",
+  "sqlalchemy>=2.1.4,<2.2",
+  "alembic>=1.20.0,<1.21",
+  "psycopg[binary]>=3.3.6,<3.4",
+  "pydantic-settings>=2.15.0,<3",
+  "httpx>=0.28.1,<0.29",
+  "tzdata>=2026.5",
+]
+
+[dependency-groups]
+dev = [
+  "httpx2>=2.13.1,<3",
+  "pytest>=9.1,<10",
+  "ruff>=0.16,<0.17",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cargas"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "S", "SIM"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106"]

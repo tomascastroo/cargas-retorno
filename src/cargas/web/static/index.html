@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cargas de retorno</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <!-- Acceso -->
+  <section id="auth" class="card narrow">
+    <h1>Cargas de retorno</h1>
+    <p class="muted">Decile al agente que volvés vacío y te busca la mejor carga para el regreso.</p>
+    <form id="login-form">
+      <h2>Ingresar</h2>
+      <label>Email <input name="email" type="email" required value="admin@transportesdelcentro.demo"></label>
+      <label>Contraseña <input name="password" type="password" required value="demo1234"></label>
+      <button type="submit">Ingresar</button>
+      <p class="muted small">Demo: admin@transportesdelcentro.demo o admin@logisticasur.demo, contraseña demo1234.</p>
+    </form>
+    <details>
+      <summary>Crear una empresa de transporte</summary>
+      <form id="signup-form">
+        <label>Empresa <input name="company_name" required></label>
+        <label>CUIT (opcional) <input name="cuit"></label>
+        <label>Tu nombre <input name="admin_name" required></label>
+        <label>Email <input name="admin_email" type="email" required></label>
+        <label>Contraseña (mín. 8) <input name="password" type="password" minlength="8" required></label>
+        <button type="submit">Crear empresa</button>
+      </form>
+    </details>
+    <p id="auth-error" class="error"></p>
+  </section>
+
+  <!-- Aplicación -->
+  <div id="app" hidden>
+    <header class="topbar">
+      <strong>Cargas de retorno</strong>
+      <span id="who" class="muted"></span>
+      <nav>
+        <button data-tab="chat" class="tab active">Chat</button>
+        <button data-tab="config" class="tab">Configuración</button>
+        <button data-tab="history" class="tab">Historial</button>
+        <button id="logout" class="link">Salir</button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="tab-chat" class="tab-panel">
+        <div class="phone">
+          <div class="phone-header">
+            <div class="avatar">🚚</div>
+            <div><strong>Agente de retorno</strong><br><span class="small">canal: chat web (simula WhatsApp)</span></div>
+            <button id="new-chat" class="link light">Nueva conversación</button>
+          </div>
+          <div id="messages" class="messages"></div>
+          <form id="chat-form" class="composer">
+            <input id="chat-input" autocomplete="off" placeholder="Ej.: Vuelvo mañana de Córdoba a Buenos Aires vacío">
+            <button type="submit" aria-label="Enviar">➤</button>
+          </form>
+        </div>
+        <aside class="hints card">
+          <h3>Probá</h3>
+          <ul id="examples">
+            <li>Vuelvo mañana de Córdoba a Buenos Aires vacío</li>
+            <li>Estoy saliendo de Córdoba mañana para Buenos Aires. Vuelvo vacío con un semi de 28 pallets.</li>
+            <li>Vuelvo a Buenos Aires</li>
+            <li>hola</li>
+            <li>descartar 1</li>
+            <li>2</li>
+            <li>sí</li>
+            <li>nuevo</li>
+          </ul>
+          <p class="muted small">Tocá un ejemplo para escribirlo. Los dadores y sus respuestas son <b>simulados</b>: no se envía ningún mensaje real.</p>
+        </aside>
+      </section>
+
+      <section id="tab-config" class="tab-panel" hidden>
+        <div class="grid">
+          <div class="card">
+            <h2>Camiones</h2>
+            <table id="trucks-table"><thead><tr><th>Patente</th><th>Tipo</th><th>Carrocería</th><th>Pallets</th><th>Kg</th><th></th></tr></thead><tbody></tbody></table>
+            <form id="truck-form" class="inline-form">
+              <input name="plate" placeholder="Patente" required>
+              <select name="vehicle_type"><option>semi</option><option>chasis</option><option>balancin</option><option>camioneta</option></select>
+              <select name="body_type"><option>sider</option><option>caja seca</option><option>playo</option><option>tolva</option><option>termico</option></select>
+              <input name="capacity_pallets" type="number" min="1" max="60" placeholder="Pallets" required>
+              <input name="capacity_kg" type="number" min="500" max="60000" placeholder="Kg" required>
+              <button type="submit">Agregar</button>
+            </form>
+            <p id="truck-error" class="error"></p>
+          </div>
+          <div class="card">
+            <h2>Agente</h2>
+            <form id="agent-form" class="stack">
+              <label>Tarifa mínima por km cargado (ARS) <input name="min_rate_per_km" type="number" step="1" min="0"></label>
+              <label>Tarifa objetivo por km (ARS) <input name="target_rate_per_km" type="number" step="1" min="1"></label>
+              <label>Costo variable por km (ARS) <input name="cost_per_km" type="number" step="1" min="0"></label>
+              <label>Desvío máximo (km) <input name="max_detour_km" type="number" min="0" max="2000"></label>
+              <label>Días de flexibilidad para retirar <input name="date_flex_days" type="number" min="0" max="7"></label>
+              <label>Mercaderías excluidas (separadas por coma) <input name="excluded_cargo_types"></label>
+              <label>Rondas máximas de negociación <input name="max_negotiation_rounds" type="number" min="1" max="5"></label>
+              <label>Contraoferta máxima sobre lo publicado (%) <input name="max_counter_uplift_pct" type="number" min="0" max="50" step="0.5"></label>
+              <button type="submit">Guardar</button>
+              <span id="agent-saved" class="muted small"></span>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-history" class="tab-panel" hidden>
+        <div class="grid">
+          <div class="card"><h2>Viajes buscados</h2><div id="trips"></div></div>
+          <div class="card"><h2>Operaciones</h2><div id="bookings"></div>
+            <h2>Fuentes de cargas</h2><div id="sources"></div></div>
+        </div>
+        <div class="card"><h2>Auditoría</h2><div id="audit"></div></div>
+      </section>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -41,7 +41,8 @@ docker compose exec app python -m cargas.cli ingest   # volver a consultar las f
 docker compose down -v                           # borrar todo (incluida la base)
 ```
 
-Si el puerto 8000 o 5432 está ocupado: `APP_PORT=8080 DB_PORT=5433 docker compose up -d`.
+La base queda publicada en el puerto **5433** del host (no en 5432, para no chocar con un
+PostgreSQL local). Si el 8000 o el 5433 están ocupados: `APP_PORT=8080 DB_PORT=5434 docker compose up -d`.
 
 API interactiva (OpenAPI): http://localhost:8000/docs
 
@@ -163,7 +164,7 @@ O sólo la base con Docker: `docker compose up -d db` (el rol `cargas` tiene con
 ```bash
 uv run pytest            # usa postgresql://cargas:cargas@localhost:5432/cargas_test
 # con la base de Docker Compose:
-CARGAS_TEST_DATABASE_URL=postgresql+psycopg://cargas:cargas_dev_password@localhost:5432/cargas_test uv run pytest
+CARGAS_TEST_DATABASE_URL=postgresql+psycopg://cargas:cargas_dev_password@localhost:5433/cargas_test uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 

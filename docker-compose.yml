@@ -23,7 +23,7 @@ services:
       - db-data:/var/lib/postgresql/data
       - ./docker/init-db.sh:/docker-entrypoint-initdb.d/10-init.sh:ro
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ${CARGAS_DB_NAME:-cargas}"]
       interval: 3s

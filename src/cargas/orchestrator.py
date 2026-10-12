@@ -28,9 +28,10 @@ from cargas.commercial.agent import (
     SimulatedShipperChannel,
     negotiate,
 )
+from cargas.contacts import contacts_for_trip
 from cargas.geo.places import normalize, resolve_place
 from cargas.geo.routing import Router
-from cargas.matching.engine import explain, rank
+from cargas.matching.engine import AgentPolicy, TripSpec, explain, rank
 from cargas.models import (
     Booking,
     Conversation,
@@ -348,25 +349,79 @@ class Orchestrator:
         )
         discarded = self._rejection_summary(reasons)
 
+        contacts = self._contacts_message(session, user, trip, spec, policy)
         if not eligible:
             trip.status = "no_results"
             state.clear()
-            return [
+            replies = [
                 OutboundMessage(
                     f"{header} No encontré cargas compatibles. {discarded} Podés ampliar el desvío "
                     "máximo o los días de flexibilidad en Configuración, o probar con otra fecha.",
                     {"kind": "no_results", "trip_id": str(trip.id), "rejected": dict(reasons)},
                 )
             ]
+            return replies + ([contacts] if contacts else [])
 
         trip.status = "options_sent"
         state.clear()
         state.update(stage="choosing", trip_id=str(trip.id), options=option_ids, offset=0)
-        return [
-            self._options_message(
-                session, state, header=f"{header} Encontré {len(eligible)} compatibles. {discarded}"
+        options = self._options_message(
+            session, state, header=f"{header} Encontré {len(eligible)} compatibles. {discarded}"
+        )
+        return [options] + ([contacts] if contacts else [])
+
+    def _contacts_message(
+        self, session: Session, user: User, trip: Trip, spec: TripSpec, policy: AgentPolicy
+    ) -> OutboundMessage | None:
+        """Dadores de la agenda de la empresa que cargan en el origen o sobre la ruta."""
+        suggestions = contacts_for_trip(
+            session,
+            user.company_id,
+            spec,
+            self.router,
+            policy.max_detour_km,
+            policy.excluded_cargo_types,
+        )
+        if not suggestions:
+            return None
+        audit(
+            session,
+            user.company_id,
+            user.id,
+            "contacts_suggested",
+            "trip",
+            trip.id,
+            contacts=[str(sg.contact.id) for sg in suggestions],
+        )
+        lines = ["De tu agenda, estos dadores cargan sobre tu ruta y podrías consultarlos:"]
+        cards = []
+        for sg in suggestions:
+            where = sg.city if sg.detour_km < 15 else f"{sg.city}, desvío {sg.detour_km:.0f} km"
+            reach = " · ".join(
+                filter(
+                    None,
+                    [
+                        f"tel. {sg.contact.phone}" if sg.contact.phone else None,
+                        sg.contact.email,
+                    ],
+                )
             )
-        ]
+            lines.append(f"• {sg.contact.name} ({where}) — {reach}")
+            cards.append(
+                {
+                    "id": str(sg.contact.id),
+                    "name": sg.contact.name,
+                    "city": sg.city,
+                    "detour_km": sg.detour_km,
+                    "phone": sg.contact.phone,
+                    "email": sg.contact.email,
+                }
+            )
+        lines.append(
+            "(Por ahora el agente no les escribe: la consulta automática llega con la "
+            "integración de WhatsApp.)"
+        )
+        return OutboundMessage("\n".join(lines), {"kind": "contacts", "contacts": cards})
 
     @staticmethod
     def _rejection_summary(reasons: Counter[str]) -> str:

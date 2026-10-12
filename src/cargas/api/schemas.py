@@ -203,3 +203,34 @@ class SourceOut(ORM):
     last_status: str | None
     last_error: str | None
     last_count: int | None
+
+
+class ContactIn(BaseModel):
+    name: str
+    phone: str | None = None
+    email: str | None = None
+    cities: list[str]
+    cargo_types: list[str] = []
+    notes: str | None = None
+
+
+class ContactOut(ORM):
+    id: uuid.UUID
+    name: str
+    phone: str | None
+    email: str | None
+    cities: list[str]
+    cargo_types: list[str]
+    notes: str | None
+    active: bool
+    created_at: datetime
+
+
+class ContactImportIn(BaseModel):
+    csv: str = Field(min_length=1)
+
+
+class ContactImportOut(BaseModel):
+    created: int
+    updated: int
+    rejected: list[dict[str, Any]]

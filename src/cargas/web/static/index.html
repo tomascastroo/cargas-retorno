@@ -66,6 +66,7 @@
             <li>Vuelvo mañana de Córdoba a Buenos Aires vacío</li>
             <li>Estoy saliendo de Córdoba mañana para Buenos Aires. Vuelvo vacío con un semi de 28 pallets.</li>
             <li>Vuelvo a Buenos Aires</li>
+            <li>Vuelvo mañana de Comodoro Rivadavia a Trelew</li>
             <li>hola</li>
             <li>descartar 1</li>
             <li>2</li>
@@ -77,6 +78,29 @@
       </section>
 
       <section id="tab-config" class="tab-panel" hidden>
+        <div class="card">
+          <h2>Contactos de carga</h2>
+          <p class="muted small">Dadores con los que trabaja tu empresa. Sólo los ve tu empresa. Cuando busques carga, el agente te sugiere los que cargan sobre tu ruta.</p>
+          <table id="contacts-table"><thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Localidades</th><th>Mercaderías</th><th>Notas</th><th></th></tr></thead><tbody></tbody></table>
+          <form id="contact-form" class="contact-form">
+            <input type="hidden" name="id">
+            <input name="name" placeholder="Nombre" required>
+            <input name="phone" placeholder="Teléfono (con código de país)">
+            <input name="email" type="email" placeholder="Email">
+            <input name="cities" placeholder="Localidades (separadas por coma)" required>
+            <input name="cargo_types" placeholder="Mercaderías (general, granel…)">
+            <input name="notes" placeholder="Notas">
+            <button type="submit" id="contact-submit">Agregar</button>
+            <button type="button" id="contact-cancel" class="secondary" hidden>Cancelar</button>
+          </form>
+          <p id="contact-error" class="error"></p>
+          <div class="import-row">
+            <label class="file-label">Importar CSV <input id="contacts-file" type="file" accept=".csv,text/csv"></label>
+            <a href="/static/contactos_ejemplo.csv" download>Descargar planilla de ejemplo</a>
+            <span class="muted small">Columnas: nombre, telefono, email, localidades, mercaderias, notas. Varias localidades separadas con «|». Si el teléfono o email ya existe, se actualiza.</span>
+          </div>
+          <div id="import-report" class="small"></div>
+        </div>
         <div class="grid">
           <div class="card">
             <h2>Camiones</h2>

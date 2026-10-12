@@ -104,6 +104,12 @@ function renderBubble(direction, text, payload, createdAt) {
     html = esc(header) + payload.options.map(optionCard).join("") +
       `<div class="small muted" style="margin-top:6px">Respondé con el número o tocá un botón.</div>`;
   }
+  if (payload && payload.kind === "contacts") {
+    const [title, ...rest] = text.split("\n");
+    html = esc(title) + payload.contacts.map((c) => `<div class="contact-card"><b>${esc(c.name)}</b> · ${esc(c.city)}${c.detour_km >= 15 ? ` (desvío ${Math.round(c.detour_km)} km)` : ""}<br>
+      <span class="small">${c.phone ? `tel. ${esc(c.phone)}` : ""}${c.phone && c.email ? " · " : ""}${c.email ? esc(c.email) : ""}</span></div>`).join("") +
+      `<div class="small muted" style="margin-top:6px">${esc(rest[rest.length - 1] || "")}</div>`;
+  }
   if (payload && payload.kind === "negotiation" && payload.transcript) {
     html += `<div class="transcript">${payload.transcript.map((t) => `<div><b>${esc(t.de)}:</b> ${esc(t.texto)}</div>`).join("")}</div>`;
   }
@@ -152,7 +158,77 @@ $("#new-chat").addEventListener("click", () => {
 
 // ------------------------------------------------------------------ configuración
 
+const splitList = (v) => v.split(/[,|]/).map((x) => x.trim()).filter(Boolean);
+let contactsCache = [];
+
+async function loadContacts() {
+  contactsCache = await api("/api/contacts");
+  $("#contacts-table tbody").innerHTML = contactsCache.map((c) => `<tr>
+    <td>${esc(c.name)}</td><td>${esc(c.phone || "")}</td><td>${esc(c.email || "")}</td>
+    <td>${esc(c.cities.join(", "))}</td><td>${esc(c.cargo_types.join(", "))}</td><td class="small">${esc(c.notes || "")}</td>
+    <td><button class="link" data-edit-contact="${c.id}">Editar</button><button class="link" data-delete-contact="${c.id}">Borrar</button></td></tr>`).join("")
+    || '<tr><td colspan="7" class="muted">Todavía no cargaste contactos.</td></tr>';
+}
+
+function resetContactForm() {
+  const form = $("#contact-form");
+  form.reset();
+  form.elements.id.value = "";
+  $("#contact-submit").textContent = "Agregar";
+  $("#contact-cancel").hidden = true;
+  $("#contact-error").textContent = "";
+}
+
+$("#contact-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target.elements;
+  const body = {
+    name: f.name.value, phone: f.phone.value || null, email: f.email.value || null,
+    cities: splitList(f.cities.value), cargo_types: splitList(f.cargo_types.value), notes: f.notes.value || null,
+  };
+  try {
+    if (f.id.value) await api(`/api/contacts/${f.id.value}`, { method: "PUT", body });
+    else await api("/api/contacts", { method: "POST", body });
+    resetContactForm();
+    loadContacts();
+  } catch (err) { $("#contact-error").textContent = err.message; }
+});
+
+$("#contact-cancel").addEventListener("click", resetContactForm);
+
+$("#contacts-table").addEventListener("click", async (e) => {
+  const { editContact, deleteContact } = e.target.dataset;
+  if (deleteContact) {
+    if (!confirm("¿Borrar este contacto?")) return;
+    await api(`/api/contacts/${deleteContact}`, { method: "DELETE" });
+    loadContacts();
+  }
+  if (editContact) {
+    const c = contactsCache.find((x) => x.id === editContact);
+    const f = $("#contact-form").elements;
+    f.id.value = c.id; f.name.value = c.name; f.phone.value = c.phone || ""; f.email.value = c.email || "";
+    f.cities.value = c.cities.join(", "); f.cargo_types.value = c.cargo_types.join(", "); f.notes.value = c.notes || "";
+    $("#contact-submit").textContent = "Guardar";
+    $("#contact-cancel").hidden = false;
+    f.name.focus();
+  }
+});
+
+$("#contacts-file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const report = $("#import-report");
+  try {
+    const res = await api("/api/contacts/import", { method: "POST", body: { csv: await file.text() } });
+    report.innerHTML = `<b>Importación:</b> ${res.created} nuevos, ${res.updated} actualizados, ${res.rejected.length} con errores.` +
+      (res.rejected.length ? `<ul>${res.rejected.map((r) => `<li>Fila ${r.line}: ${esc(r.reason)}</li>`).join("")}</ul>` : "");
+    loadContacts();
+  } catch (err) { report.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+  e.target.value = "";
+});
+
 async function loadConfig() {
+  loadContacts();
   const [trucks, agent] = await Promise.all([api("/api/trucks"), api("/api/agent")]);
   $("#trucks-table tbody").innerHTML = trucks.map((t) => `<tr>
     <td>${esc(t.plate)}</td><td>${esc(t.vehicle_type)}</td><td>${esc(t.body_type)}${t.refrigerated ? " ❄️" : ""}</td>

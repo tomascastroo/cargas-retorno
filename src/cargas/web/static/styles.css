@@ -74,6 +74,14 @@ th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line
 .pill.warn { background: #fde7c4; }
 .pill.err { background: #fbd5d1; }
 
+button.secondary { background: #e7ebee; color: var(--text); }
+.contact-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; margin-top: 12px; }
+.import-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
+.file-label { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--accent-dark); font-weight: 600; cursor: pointer; }
+.file-label input { width: auto; }
+.contact-card { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-top: 6px; background: #fafbfb; white-space: normal; }
+#contacts-table td { word-break: break-word; }
+
 @media (max-width: 760px) {
   #tab-chat { grid-template-columns: 1fr; }
   .phone { height: 70vh; }

@@ -5,8 +5,8 @@ Agente que consigue **carga para el viaje de vuelta** de un camión. El camioner
 oportunidades compatibles, las ordena con un puntaje explicable, contacta al dador (simulado en
 el MVP) y registra la operación cuando el camionero la aprueba.
 
-Plataforma **multiempresa**: cada empresa de transporte tiene sus camiones, la configuración de
-su agente, sus conversaciones y su historial, aislados con `company_id` + Row-Level Security de
+Plataforma **multiempresa**: cada empresa de transporte tiene sus camiones, su agenda de
+dadores de carga, la configuración de su agente, sus conversaciones y su historial, aislados con `company_id` + Row-Level Security de
 PostgreSQL. Las oportunidades de carga son compartidas.
 
 **Costo de ejecución: cero.** Todo corre localmente con software open source: Python, FastAPI,
@@ -30,7 +30,7 @@ Abrí **http://localhost:8000**. Al iniciar, el servicio `app`:
 
 | Usuario | Empresa | Contraseña |
 |---|---|---|
-| `admin@transportesdelcentro.demo` | Transportes del Centro (demo): semi sider AB123CD, 28 pallets, excluye mercadería peligrosa | `demo1234` |
+| `admin@transportesdelcentro.demo` | Transportes del Centro (demo): semi sider AB123CD, 28 pallets, excluye mercadería peligrosa, 4 contactos de carga | `demo1234` |
 | `admin@logisticasur.demo` | Logística Sur (demo): semi térmico AC456EF, 26 pallets | `demo1234` |
 
 Otros comandos:
@@ -77,6 +77,11 @@ Casos para probar en el chat:
 | Elegir *Leche en polvo* | Contraoferta del dador dentro de los límites; responder `no` la descarta |
 | `nuevo` | Reinicia la conversación |
 
+**Contactos de carga**: en *Configuración → Contactos de carga* se cargan los dadores con los que
+trabaja la empresa, a mano o importando una planilla CSV (hay una de ejemplo para descargar).
+En cada búsqueda, el agente sugiere los que cargan en el origen o sobre la ruta. Ver
+[docs/contactos.md](docs/contactos.md).
+
 El escenario completo también está automatizado en `tests/test_flow.py::test_full_scenario`.
 
 ## Qué es real y qué está simulado
@@ -93,6 +98,7 @@ El escenario completo también está automatizado en `tests/test_flow.py::test_f
 | Contacto y negociación con el dador | **Simulada**: el dador demo responde según el campo `simulation` de cada carga. La política de negociación (tarifa mínima, rondas, tope de contraoferta) es real y está probada |
 | Reserva | **Real como registro**, con aprobación explícita del camionero; estado `simulated_confirmed` porque no se confirma nada con el dador real |
 | Multiempresa / RLS / auditoría inmutable | **Real** y probado contra PostgreSQL |
+| Contactos de carga (agenda, CSV, sugerencias por ruta) | **Real** y probado. El agente los **sugiere**; todavía no les escribe |
 | Canal | Chat web que imita WhatsApp. **No** hay integración con WhatsApp |
 | Autenticación | Tokens firmados (HMAC) y contraseñas con scrypt; suficiente para el MVP, sin recuperación de contraseña ni roles finos |
 
@@ -132,8 +138,9 @@ src/cargas/
   channels/base.py     mensajes independientes del canal
   api/                 endpoints, esquemas, autenticación y contexto de empresa
   models.py, db.py     SQLAlchemy y sesiones con contexto RLS
+  contacts.py          agenda de dadores: validación, importación CSV y sugerencias por ruta
   cli.py               migrate · seed · ingest
-migrations/            Alembic (0001 esquema, 0002 RLS + auditoría inmutable)
+migrations/            Alembic (0001 esquema, 0002 RLS + auditoría inmutable, 0003 contactos)
 data/                  cargas demo (JSON y CSV)
 tests/                 pytest contra PostgreSQL real
 docker/init-db.sh      crea el rol de la aplicación SIN superusuario ni BYPASSRLS
@@ -168,8 +175,8 @@ CARGAS_TEST_DATABASE_URL=postgresql+psycopg://cargas:cargas_dev_password@localho
 uv run ruff check . && uv run ruff format --check .
 ```
 
-76 tests: parser (incluido el fallback del LLM), matching (cada regla de elegibilidad y el
-ranking), ingesta (duplicados, rechazos, vencimientos, fuente caída), negociación (nunca debajo
+86 tests: parser (incluido el fallback del LLM), matching (cada regla de elegibilidad y el
+ranking), contactos (validación, CSV, aislamiento, sugerencias), ingesta (duplicados, rechazos, vencimientos, fuente caída), negociación (nunca debajo
 del mínimo), escenario completo por API, aislamiento por API y **RLS directo en la base**
 (consultas sin filtro, escritura cruzada, auditoría inmutable).
 
@@ -213,6 +220,8 @@ dejá `CARGAS_LLM_PROVIDER=none`: las reglas cubren los mensajes típicos.
 | POST | `/api/auth/login` | Login |
 | GET/POST/DELETE | `/api/trucks` | Camiones de la empresa |
 | GET/PUT | `/api/agent` | Configuración del agente |
+| GET/POST/PUT/DELETE | `/api/contacts` | Agenda de dadores de la empresa (`?city=` filtra por localidad) |
+| POST | `/api/contacts/import` | Importación CSV con reporte por fila |
 | POST | `/api/chat/messages` | Mensaje del camionero → respuestas del agente |
 | GET | `/api/conversations`, `/api/conversations/{id}/messages` | Historial de conversaciones |
 | GET | `/api/trips`, `/api/trips/{id}` | Viajes con sus matches, puntajes y métricas |
@@ -240,5 +249,7 @@ curl -s -X POST localhost:8000/api/chat/messages -H "authorization: Bearer $TOKE
   autoricen el uso de sus datos.
 - **Negociación real**: un `ShipperChannel` que envíe mensajes y devuelva `pending`; la
   respuesta retoma la negociación (ahí sí hace falta un worker o una cola).
+- **Consulta a contactos**: que el agente escriba a los contactos sugeridos y sus respuestas
+  entren como ofertas privadas de la empresa.
 - **Avisos**: guardar búsquedas sin resultados y avisar cuando entra una carga compatible.
 - **Facturación SaaS**: planes por empresa sobre la tabla `companies`.

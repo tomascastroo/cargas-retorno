@@ -9,6 +9,7 @@ import argparse
 import logging
 import os
 import sys
+import uuid
 from datetime import UTC, datetime
 
 from alembic import command
@@ -17,9 +18,10 @@ from sqlalchemy import select, text
 
 from cargas.auth import hash_password
 from cargas.config import project_root
+from cargas.contacts import validate_contact
 from cargas.db import public_session, tenant_session
 from cargas.ingestion.service import IngestionReport, run_ingestion
-from cargas.models import Agent, Company, LoadSource, Truck, User
+from cargas.models import Agent, Company, LoadSource, ShipperContact, Truck, User
 from cargas.services import audit
 
 log = logging.getLogger("cargas.cli")
@@ -67,6 +69,34 @@ DEMO_COMPANIES = [
             "capacity_pallets": 28,
             "capacity_kg": 30000,
         },
+        "contacts": [
+            {
+                "name": "Acopio Oncativo (demo)",
+                "phone": "5493572000101",
+                "cities": ["Córdoba"],
+                "cargo_types": ["granel", "general"],
+                "notes": "Cosecha gruesa de marzo a julio.",
+            },
+            {
+                "name": "Cooperativa Villa María (demo)",
+                "phone": "5493534000102",
+                "email": "fletes@coopvm.invalid",
+                "cities": ["Villa María", "Bell Ville"],
+                "cargo_types": ["general"],
+            },
+            {
+                "name": "Molino Rosario (demo)",
+                "email": "despacho@molinorosario.invalid",
+                "cities": ["Rosario"],
+                "cargo_types": ["general"],
+            },
+            {
+                "name": "Bodega Cuyo (demo)",
+                "phone": "5492614000104",
+                "cities": ["Mendoza"],
+                "cargo_types": ["general"],
+            },
+        ],
         "agent": {
             "excluded_cargo_types": ["peligrosa"],
             "usual_routes": [{"origin": "Buenos Aires", "destination": "Córdoba"}],
@@ -86,6 +116,7 @@ DEMO_COMPANIES = [
             "capacity_kg": 28000,
             "refrigerated": True,
         },
+        "contacts": [],
         "agent": {},
     },
 ]
@@ -127,8 +158,6 @@ def seed_sources() -> None:
 
 
 def seed_companies(password: str) -> None:
-    import uuid
-
     for spec in DEMO_COMPANIES:
         company_id = uuid.UUID(spec["id"])
         with tenant_session(company_id) as session:
@@ -152,12 +181,29 @@ def seed_companies(password: str) -> None:
         print(f"  empresa demo: {spec['name']} · usuario {spec['email']}")
 
 
+def seed_contacts() -> None:
+    """Agenda demo: sólo si la empresa demo todavía no tiene contactos (no pisa cambios)."""
+    for spec in DEMO_COMPANIES:
+        company_id = uuid.UUID(spec["id"])
+        with tenant_session(company_id) as session:
+            if session.get(Company, company_id) is None:
+                continue
+            if session.scalar(
+                select(ShipperContact.id).where(ShipperContact.company_id == company_id).limit(1)
+            ):
+                continue
+            for contact in spec["contacts"]:
+                data = validate_contact(contact)
+                session.add(ShipperContact(company_id=company_id, **data.model_dump()))
+
+
 def seed() -> None:
     password = os.environ.get("CARGAS_DEMO_PASSWORD", "demo1234")
     seed_sources()
     print("Ingesta de fuentes demo:")
     ingest()
     seed_companies(password)
+    seed_contacts()
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -15,12 +15,14 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -112,6 +114,43 @@ class Truck(Base):
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = _created()
+
+
+class ShipperContact(Base):
+    """Dador de carga con el que trabaja la empresa (agenda privada)."""
+
+    __tablename__ = "shipper_contacts"
+    __table_args__ = (
+        Index(
+            "uq_shipper_contacts_phone",
+            "company_id",
+            "phone",
+            unique=True,
+            postgresql_where=text("phone IS NOT NULL"),
+        ),
+        Index(
+            "uq_shipper_contacts_email",
+            "company_id",
+            "email",
+            unique=True,
+            postgresql_where=text("email IS NOT NULL"),
+        ),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    company_id: Mapped[uuid.UUID] = _company_fk()
+    name: Mapped[str] = mapped_column(String(200))
+    # Sólo dígitos, con código de país (p. ej. 5493511234567). Clave para el futuro WhatsApp.
+    phone: Mapped[str | None] = mapped_column(String(20))
+    email: Mapped[str | None] = mapped_column(String(320))
+    # Localidades donde carga (nombres canónicos del nomenclátor).
+    cities: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    cargo_types: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    notes: Mapped[str | None] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 # --------------------------------------------------------------- oportunidades (compartidas)
@@ -325,6 +364,7 @@ TENANT_TABLES = (
     "users",
     "agents",
     "trucks",
+    "shipper_contacts",
     "conversations",
     "messages",
     "trips",

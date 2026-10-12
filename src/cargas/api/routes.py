@@ -4,12 +4,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from cargas.api import schemas as s
 from cargas.api.deps import company_context, current_claims, local_now, not_found, owned
 from cargas.auth import TokenClaims, create_token, hash_password, verify_password
 from cargas.channels.base import InboundMessage
+from cargas.contacts import ContactData, ContactError, find_duplicate, import_csv, validate_contact
+from cargas.contacts import apply as apply_contact
 from cargas.db import public_session, set_company, tenant_session
+from cargas.geo.places import resolve_place
 from cargas.geo.routing import get_router
 from cargas.models import (
     Agent,
@@ -23,6 +27,7 @@ from cargas.models import (
     Match,
     Message,
     Negotiation,
+    ShipperContact,
     Trip,
     Truck,
     User,
@@ -339,3 +344,119 @@ def list_loads(claims: Claims, include_inactive: bool = False) -> list[s.LoadOut
 def list_sources(claims: Claims) -> list[LoadSource]:
     with company_context(claims) as (session, _user):
         return list(session.scalars(select(LoadSource).order_by(LoadSource.code)))
+
+
+# ------------------------------------------------------------ contactos de la empresa
+
+
+def _contact_data(body: s.ContactIn) -> ContactData:
+    try:
+        return validate_contact(body.model_dump())
+    except ContactError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+
+def _conflict(
+    session: Session, company_id: uuid.UUID, data: ContactData, exclude: uuid.UUID | None = None
+) -> None:
+    if find_duplicate(session, company_id, data, exclude) is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Ya tenés un contacto con ese teléfono o email"
+        )
+
+
+@router.get("/contacts", response_model=list[s.ContactOut])
+def list_contacts(claims: Claims, city: str | None = None) -> list[ShipperContact]:
+    with company_context(claims) as (session, user):
+        query = select(ShipperContact).where(
+            ShipperContact.company_id == user.company_id, ShipperContact.active.is_(True)
+        )
+        if city:
+            place = resolve_place(city)
+            if place is None:
+                return []
+            query = query.where(ShipperContact.cities.contains([place.name]))
+        return list(session.scalars(query.order_by(ShipperContact.name)))
+
+
+@router.post("/contacts", response_model=s.ContactOut, status_code=201)
+def create_contact(body: s.ContactIn, claims: Claims) -> ShipperContact:
+    data = _contact_data(body)
+    with company_context(claims) as (session, user):
+        _conflict(session, user.company_id, data)
+        contact = ShipperContact(company_id=user.company_id, **data.model_dump())
+        session.add(contact)
+        session.flush()
+        audit(
+            session,
+            user.company_id,
+            user.id,
+            "contact_created",
+            "shipper_contact",
+            contact.id,
+            name=contact.name,
+            cities=contact.cities,
+        )
+        session.refresh(contact)
+        return contact
+
+
+@router.put("/contacts/{contact_id}", response_model=s.ContactOut)
+def update_contact(contact_id: uuid.UUID, body: s.ContactIn, claims: Claims) -> ShipperContact:
+    data = _contact_data(body)
+    with company_context(claims) as (session, user):
+        contact = owned(session, ShipperContact, contact_id, user.company_id)
+        _conflict(session, user.company_id, data, exclude=contact.id)
+        apply_contact(contact, data)
+        session.flush()
+        audit(
+            session,
+            user.company_id,
+            user.id,
+            "contact_updated",
+            "shipper_contact",
+            contact.id,
+            name=contact.name,
+            cities=contact.cities,
+        )
+        session.refresh(contact)
+        return contact
+
+
+@router.delete("/contacts/{contact_id}", status_code=204)
+def delete_contact(contact_id: uuid.UUID, claims: Claims) -> None:
+    with company_context(claims) as (session, user):
+        contact = owned(session, ShipperContact, contact_id, user.company_id)
+        audit(
+            session,
+            user.company_id,
+            user.id,
+            "contact_deleted",
+            "shipper_contact",
+            contact.id,
+            name=contact.name,
+        )
+        session.delete(contact)
+
+
+@router.post("/contacts/import", response_model=s.ContactImportOut)
+def import_contacts(body: s.ContactImportIn, claims: Claims) -> s.ContactImportOut:
+    with company_context(claims) as (session, user):
+        try:
+            report = import_csv(session, user.company_id, body.csv)
+        except ContactError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+        audit(
+            session,
+            user.company_id,
+            user.id,
+            "contacts_imported",
+            "shipper_contact",
+            None,
+            created=report.created,
+            updated=report.updated,
+            rejected=len(report.rejected),
+        )
+        return s.ContactImportOut(
+            created=report.created, updated=report.updated, rejected=report.rejected
+        )
